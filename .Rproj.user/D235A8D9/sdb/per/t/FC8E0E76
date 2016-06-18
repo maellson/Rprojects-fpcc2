@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1463968370861.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "FC8E0E76",
+    "lastKnownWriteTime" : 3419473789575321445,
+    "last_content_update" : 1463968370861,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "gjev05vep7",
+        "caption" : "filmes_tratados",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=filmes_tratados&cache_key=gjev05vep7",
+        "displayedObservations" : 1122,
+        "environment" : "",
+        "object" : "filmes_tratados",
+        "totalObservations" : 1122,
+        "variables" : 11
+    },
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

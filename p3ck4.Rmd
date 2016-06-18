@@ -1,0 +1,971 @@
+---
+title: "problema3-ck4"
+author: "Maelson Marques de Lima"
+date: "21 de maio de 2016"
+output: word_document
+---
+
+#FPCC2-p2-c2
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(stringi)
+library(ggplot2)
+library(GGally)
+
+theme_set(theme_bw())
+```
+## ORGANIZANDO OS DADOS:
+
+Descrição da atividade:
+
+      Escolha 2 das perguntas que você listou e construa o relatório final deste problema respondendo-as utilizando as ferramentas visuais e numéricas de análise descritiva e exploratória que você preferir. A partir dos resultados dessas 2 perguntas iniciais, derive mais duas e as responda. 
+      
+      Inicialmente a organização dos dados:
+
+```{r bds, message=FALSE, warning=FALSE, results='asis', echo=TRUE}
+
+#Tabela mpvies
+movies <- read.csv("~/Rprojetos/Rprojects-fpcc2/bd-movies/movies.csv")
+#View(movies)
+
+#Tabela ratings
+ratings <- read.csv("~/Rprojetos/Rprojects-fpcc2/bd-movies/ratings.csv")
+
+#Dados Um --Base 01
+movies_join_ratings = merge(x = movies, y = ratings, by = "movieId", all.y = TRUE)
+#View(movies_join_ratings)
+
+#Dados Dois --Base 02 (Filmes Brasileiros Lançados - 1995 a 2014)
+filmes_tratados<-read.csv("~/Rprojetos/Rprojects-fpcc2/bd-movies/filmes_tratados.csv")
+#View(filmes_tratados)
+
+
+##knitr::kable(filmes_tratados[1:10, 1:11], caption = "Amostra de Filmes Tratados:")
+
+#Dados Três --BAse 03
+ratings_filme<- read.csv("~/Rprojetos/Rprojects-fpcc2/bd-movies/ratings-por-filme.csv") 
+#View(ratings_filme)
+
+
+
+
+```
+
+**Minhas Perguntas**
+
+    **Analisando a base de dados de filmes brasileiros, surgiram alguns questionamentos, inicialmente estes 2:**
+    
+     
+     1. Qual gênero de filmes brasileiros gostam mais?
+     
+     2. Qual gênero de filmes são mais rentáveis?
+     
+     3. A média de público dos estados Nordestinos é maior que a de outras regiões?
+     
+     4. Nos anos que houve decréscimo na produção de filmes, quais as estimativas?
+     
+     
+##Respondendo questão 01:
+  **1. Qual gênero de filmes brasileiros gostam mais?**
+
+```{r q01, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+##Inicilamente vamos entender a o atributo Gênero da Tabela de filmes tratados:
+
+table(filmes_tratados$Genero)
+
+#Obtemos valores que podem atrapalhar na análise, pois a quantidade de filmes dos gêneros Animação e videomusical são muito baixos. mas Vídeos de animação tem valores altos de renda e público.Sendo assim, será removido apenas o gênero Videomusical.
+
+
+#filtro para remover estes gêneros:
+
+
+filmes_tratados<-filter(filmes_tratados,Genero!='Videomusical')
+
+#Agora limitar as informações com as quais irei tratar: Gênero e Publico e remover outliers(publico >=1000 ). Acredito que faça mais sentido, trabalhar com filmes que tiveram um público considerável.
+
+#names(filmes_tratados)
+
+ft1<-filmes_tratados[, c(3,8,11)]#Titulo, Genero e Publico
+
+#transforma caracteres
+ft1$Publico<-as.character(ft1$Publico)
+#estatística descritiva sobre a tabela agrupada:
+#View(ft1)
+
+ponto<-'\\.'
+
+for(i in 1:length(ft1$Publico)){
+  ft1[i,3]<-gsub(ponto,"",ft1[i,3])}
+
+
+
+#transforma numérico
+ft1$Publico<-as.numeric(ft1$Publico)
+
+ft1$Genero<-as.character(ft1$Genero)
+
+
+
+
+ft1<-filter(ft1, ft1$Publico>1000)#miores que 1mil espectadores
+
+ft1<-filter(ft1,ft1$Publico<1000000)
+
+x<-ggplot(ft1, aes(Genero, Publico/1e3))
+x<-p+geom_boxplot( aes(fill=Genero))
+x
+
+
+
+
+```
+
+
+    **Bootstrap:**
+
+```{r prob, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+Medias_ft1<-ft1%>%group_by(Genero)%>%summarise(mediap=mean(Publico), medianap=median(Publico))
+
+#Observem que os valores são bem próximos
+knitr::kable(Medias_ft1, caption = "Média e Mediana da população")
+
+#Como podemos observar, Documentários tem uma média e Mediana muito baixa, sendo assim, executremos o IC apenas em Animações e Ficção. Além disso, existe uma dispareidade muito alta entre a média e a mediana. o que indica uma variância muito alta nestes valores, assim, é preferível tratar com a mediana.
+
+#Animação - Ficção (Mediana) -- ANIMAÇÃO > FICÇÃO
+dif_mediana_31 = Medias_ft1[1,3] - Medias_ft1[3,3]
+print(paste("Diferença na mediana observada:", round(dif_mediana_31),".Seria Melhor animação"))
+
+#Ficção - Animação (Média) -- FICÇÃO > ANIMAÇÃO
+dif_media_31=Medias_ft1[3,2]-Medias_ft1[1,2]
+print(paste("Diferença na media observada:", round(dif_media_31), ".Seria Melhor Ficção"))
+
+
+
+ft1_31<-filter(ft1, Genero=='Animação'| Genero=="Ficção")
+
+# Retorna a diferença nas médias entre o grupos de y
+# nos índices com valor de x igual a baseline após embaralhar x.
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_mean = mean(y[which(embaralhado == baseline)])
+  other_mean = mean(y[which(embaralhado != baseline)])
+  return(other_mean - baseline_mean)
+}
+
+
+#EXPERIMENTO  FICÇÃO > ANIMAÇÃO
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft1_31$Genero, ft1_31$Publico, "Ficção"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth = 100, colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_media_31$mediap))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+
+
+#EXPERIMENTO aNIMAÇÃO > FICÇÃO -MEDIANA
+
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_median = median(y[which(embaralhado == baseline)])
+  other_median = median(y[which(embaralhado != baseline)])
+  return(other_median - baseline_median)
+}
+
+num_experimentos = 1000#Rodando 100
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft1_31$Genero, ft1_31$Publico, "Animação"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth = 100, colour = "darkblue", fill = "white")
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_mediana_31$medianap))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+
+
+```
+
+
+
+###Garantir o IC:
+
+
+
+```{r gic,echo=TRUE, message=FALSE, warning=FALSE, results='asis' }
+
+#BOOTSTRAPPING IC FICÇÃO > ANIMAÇÃO --MÉDIA
+
+repeticoes = 1000 # Experimento com 1000 reptições
+
+#Gerando os valores para o bootrap para MÉDIA EM QUE FICÇÃO > ANIMAÇÃO
+exp_com_bootstrap <- function(x, y){
+  boot_x <- sample(x, size = NROW(x), replace = TRUE) # aqui é o bootstrap
+  boot_y <- sample(y, size = NROW(y), replace = TRUE) # de novo!
+  return(mean(boot_x) - mean(boot_y))
+}
+
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = exp_com_bootstrap(ft1_31[ft1_31$Genero=="Ficção",]$Publico,ft1_31[ft1_31$Genero=="Animação",]$Publico ))
+
+
+
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+  geom_histogram(binwidth = 100, colour = "darkorange", fill = "white")
+summary(experimentos)
+
+# IC com 90%: 
+#"Portanto em 90% com (margem +-0.5) das repetições os  ficaram entre:  "
+alpha = .1
+
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+# IC com 95%:
+#Portanto em 95% das repetições, com margem de +-2,5  os valores p ficaram entre:
+alpha = .05
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+
+##BOOTSTRAPPING IC ANIMAÇÃO > FICAÇÃO --MEDIANA
+repeticoes = 1000 # Experimento com 1000 reptições
+
+#Gerando os valores para o bootrap para MÉDIA EM QUE FICÇÃO > ANIMAÇÃO
+exp_com_bootstrap <- function(x, y){
+  boot_x <- sample(x, size = NROW(x), replace = TRUE) # aqui é o bootstrap
+  boot_y <- sample(y, size = NROW(y), replace = TRUE) # de novo!
+  return(median(boot_x) - median(boot_y))
+}
+
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = exp_com_bootstrap(ft1_31[ft1_31$Genero=="Animação",]$Publico,ft1_31[ft1_31$Genero=="Ficção",]$Publico ))
+
+
+
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+  geom_histogram(binwidth = 100, colour = "darkorange", fill = "white")
+summary(experimentos)
+
+# IC com 90%: 
+#"Portanto em 90% com (margem +-0.5) das repetições os  ficaram entre:  "
+alpha = .1
+
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+# IC com 95%:
+#Portanto em 95% das repetições, com margem de +-2,5  os valores p ficaram entre:
+alpha = .05
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+```
+  
+  **Portanto, é possível dizer, que As pessoas gostam mais de filmes de Animação no brasil.**
+
+
+##Respondendo questão 02:
+
+  **2. Qual gênero de filmes são mais rentáveis?**
+  
+  
+**Tratamento**
+
+```{r q02, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+#Agora limitar as informações com as quais irei tratar: Gênero e Renda e remover outliers(Renda >1000 ). Acredito que faça mais sentido, trabalhar com filmes que tiveram um Renda considerável.
+
+#names(filmes_tratados)
+
+ft2<-filmes_tratados[, c(3,8,10)]#Titulo, Genero e Renda
+
+
+#transforma caracteres
+ft2$Renda<-as.character(ft2$Renda)
+#estatística descritiva sobre a tabela agrupada:
+#View(ft2)
+
+ponto<-'\\.'
+
+for(i in 1:length(ft2$Renda)){
+  ft2[i,3]<-gsub(ponto,"",ft2[i,3])}
+
+virg<-'\\,'
+
+for(i in 1:length(ft2$Renda)){
+  ft2[i,3]<-gsub(virg,".",ft2[i,3])}
+
+#transforma numérico
+ft2$Renda<-as.numeric(ft2$Renda)
+#Pega apenas quem rendeu mais de mil reais.
+
+ft2<-filter(ft2, ft2$Renda>1000)#
+ft2$Renda<-round(ft2$Renda)
+
+media_ft2<-ft2%>%group_by(Genero)%>%summarise(mediar=mean(Renda),medianar=median(Renda))
+
+# E novamente observamos uma diferença entre os valores de Média e Mediana em relação à Animação e Ficção, com Documentário ficando para trás.
+
+knitr::kable(media_ft2, caption = "Média e Mediana da Renda")
+
+
+
+
+
+```
+
+  **Iniciamos aqui as repetições para um probabilidade de ocorrências e depois um bootstrapping.**
+  
+
+```{r prob2, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+#Como podemos observar, Documentários tem uma média e Mediana muito baixa, sendo assim, executremos o IC apenas em Animações e Ficção. Além disso, existe uma dispareidade muito alta entre a média e a mediana. o que indica uma variância muito alta nestes valores.
+
+#Animação - Ficção (Mediana)
+dif_mediana_31 = media_ft2[1,3] - media_ft2[3,3]
+
+#Ficção - Animação (Média)
+dif_media_31=media_ft2[3,2]-media_ft2[1,2]
+#View(dif_mediana_31)
+#View(dif_media_31)
+
+print(paste("Diferença na mediana observada:", round(dif_mediana_31),".Seria Melhor animação"))
+
+print(paste("Diferença na media observada:", round(dif_media_31), "Seria Melhor Ficção"))
+
+
+
+ft2_31<-filter(ft2, Genero=='Animação'| Genero=="Ficção")
+
+# Retorna a diferença nas médias entre o grupos de y
+# nos índices com valor de x igual a baseline após embaralhar x.
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_mean = mean(y[which(embaralhado == baseline)])
+  other_mean = mean(y[which(embaralhado != baseline)])
+  return(other_mean - baseline_mean)
+}
+
+
+#O  experimento medindo as média para Ficção
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft2_31$Genero, ft2_31$Renda, "Ficção"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e4)) + 
+ geom_histogram(binwidth = 100, colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_media_31$mediar))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+
+
+#####
+
+#O mesmo experimento para mediana em relação à Animação
+
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_median = median(y[which(embaralhado == baseline)])
+  other_median = median(y[which(embaralhado != baseline)])
+  return(other_median - baseline_median)
+}
+
+num_experimentos = 1000#Rodando 100
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft2_31$Genero, ft2_31$Renda, "Animação"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth = 100, colour = "darkblue", fill = "white")
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_mediana_31$medianar))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+
+
+```
+
+    **De acordo com os valores obtidos, podemos dizer que filmes de ficção tem maior rentabilidade do que filmes de animação.**
+
+
+###Garantir o IC:
+
+
+```{r gic2,echo=TRUE, message=FALSE, warning=FALSE, results='asis' }
+
+##Intervalo de confiança para Animação > Ficção --MEDIANA
+
+repeticoes = 1000 # Experimento com 1000 reptições
+
+#Gerando os valores para o bootrap
+exp_com_bootstrap <- function(x, y){
+  boot_x <- sample(x, size = NROW(x), replace = TRUE) # aqui é o bootstrap
+  boot_y <- sample(y, size = NROW(y), replace = TRUE) # de novo!
+  return(median(boot_x) - median(boot_y))
+}
+
+
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = exp_com_bootstrap(ft2_31[ft2_31$Genero=="Animação",]$Renda,ft2_31[ft2_31$Genero=="Ficção",]$Renda ))
+
+
+
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+  geom_histogram(binwidth = 100, colour = "darkorange", fill = "white")
+summary(experimentos)
+
+# IC com 90%: 
+#"Portanto em 90% com (margem +-0.5) das repetições os valores para esse genero (Animação) ficaram entre:  "
+alpha = .1
+
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+# IC com 95%:
+#Portanto em 95% das repetições, com margem de +-2,5  os valores para esse gênero (Animação) ficaram entre:
+alpha = .05
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+
+
+###############
+
+
+
+##Intervalo de confiança para  Ficção > aNIMAÇÃO  --MÉDIA
+repeticoes = 1000 # Experimento com 1000 reptições
+
+#Gerenaod os valores para o bootrap
+exp_com_bootstrap <- function(x, y){
+  boot_x <- sample(x, size = NROW(x), replace = TRUE) # aqui é o bootstrap
+  boot_y <- sample(y, size = NROW(y), replace = TRUE) # de novo!
+  return(mean(boot_x) - mean(boot_y))
+}
+
+
+
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = exp_com_bootstrap(ft2_31[ft2_31$Genero=="Ficção",]$Renda,ft2_31[ft2_31$Genero=="Animação",]$Renda ))
+
+
+
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+  geom_histogram(binwidth = 100, colour = "darkorange", fill = "white")
+summary(experimentos)
+
+# IC com 90%: 
+#"Portanto em 90% com (margem +-0.5) das repetições as médias ficaram entre:  "
+alpha = .1
+
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+# IC com 95%:
+#Portanto em 95% das repetições, com margem de +-2,5  as médias ficaram entre:
+alpha = .05
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+
+
+```
+
+
+
+##QUESTÃO 3
+
+ 3. A média de público dos estados Nordestinos é maior que a de outras regiões?
+ 
+ 
+ 
+```{r q03}
+
+ 
+
+filmes_tratados<-filter(filmes_tratados,Genero!='Videomusical')
+
+#Agora limitar as informações com as quais irei tratar: Estado e Público e remover outliers(publico >1000 ). Acredito que faça mais sentido, trabalhar com filmes que tiveram um público considerável.
+
+ 
+
+ft3<-filmes_tratados[, c(3,6,11)]#Titulo, Genero e Publico
+
+View(ft3)
+#transforma caracteres
+ft3$Publico<-as.character(ft3$Publico)
+#estatística descritiva sobre a tabela agrupada:
+#View(ft1)
+
+ponto<-'\\.'
+
+for(i in 1:length(ft3$Publico)){
+  ft3[i,3]<-gsub(ponto,"",ft3[i,3])}
+
+
+
+#transforma numérico
+ft3$Publico<-as.numeric(ft3$Publico)
+
+ft3<-filter(ft3, ft3$Publico>1000)#miores que 1mil espectadores
+
+#
+medias_ft3<-ft3%>%group_by(UF)%>%summarise(mediap=mean(Publico), medianap=median(Publico))
+medias_ft3<-filter(medias_ft3, UF!='AM',UF!='MG / RJ' )#médias sem am e mg/rj
+#View(medias_ft3)
+
+#Observem que os valores são bem próximos
+knitr::kable(medias_ft3, caption = "Média e Mediana da população")
+
+#agora agupamento para receber as médias de cada região:
+
+#nordeste
+df1<-filter(ft3,UF=='BA'|UF=='PE'|UF=='CE'|UF=='SE'|UF=='MA')%>%summarise(Regiao='NORDESTE',somaP=sum(Publico),mediaP=mean(Publico))
+
+
+#sudeste
+df2<-filter(ft3,UF=='SP'|UF=='RJ'|UF=='MG'|UF=='ES')%>%summarise(Regiao='SUDESTE',somaP=sum(Publico),mediaP=mean(Publico))
+
+#sul
+df3<-filter(ft3,UF=='SC'|UF=='RS'|UF=='PR')%>%summarise(Regiao='SUL',somaP=sum(Publico),mediaP=mean(Publico))
+
+Media_regiao<-df1
+Media_regiao<-rbind(Media_regiao,df2)
+Media_regiao<-rbind(Media_regiao,df3)
+
+#As médias da região sudeste são muito altas, o que já responderia a questão inicial,
+knitr::kable(Media_regiao, caption = "Média e Mediana da população")
+
+```
+
+    Como as médias das regiões sudeste já se mostram muito superiores às das outras regiões, Farei um pouco diferente e irei comparar apenas entre os estados do SP e CE que se mostram mais parecidos em suas médias, mas tem dispareidade nas medianas.
+    
+    
+```{r cesp, message=FALSE, warning=FALSE, results='asis', echo=TRUE}
+
+  #filtro para CE e SP
+  ft3<-filter(ft3, UF=="CE" | UF=="SP")
+  #View(novo_ft3)
+
+#Agrupando as médias de ft3
+medias_ft3<-ft3%>%group_by(UF)%>%summarise(mediap=mean(Publico), medianap=median(Publico))
+  #View(medias_ft3)
+
+#Existem diferença entre as medianas e médias dos estados: 
+
+#Ceará > São paulo--média
+dif_media_12=medias_ft3[1,2]-medias_ft3[2,2]
+print(paste("Diferença na media observada:", round(dif_media_12), ".Seria Melhor Ceará"))
+
+
+#São paulo> ceará -- mediana
+dif_mediana_21 = medias_ft3[2,3] - medias_ft3[1,3]
+print(paste("Diferença na mediana observada:", round(dif_mediana_21),".Seria Melhor São paulo"))
+
+
+```
+
+
+  **Iniciando as probabilidades**
+  
+  
+ **O  experimento medindo as médias CE**
+  
+```{r prob3, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+
+# Retorna a diferença nas médias entre o grupos de y
+# nos índices com valor de x igual a baseline após embaralhar x.
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_mean = mean(y[which(embaralhado == baseline)])
+  other_mean = mean(y[which(embaralhado != baseline)])
+  return(other_mean - baseline_mean)
+}
+
+
+#O  experimento medindo as médias CE
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft3$UF, ft3$Publico, "CE"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth =30 , colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_media_12$mediap))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+#De acordo com os valores obtidos, podemos dizer que filmes cearenses tem uma público maior do que filmes Paulistas de acordo com a Analisando a Média
+
+```
+
+
+**O  experimento medindo as médianas SP**
+
+```{r pob4, message=FALSE, warning=FALSE, results='asis', echo=TRUE}
+
+################################
+
+
+
+#O  experimento medindo as médianas SP
+
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_median = median(y[which(embaralhado == baseline)])
+  other_median = median(y[which(embaralhado != baseline)])
+  return(other_median - baseline_median)
+}
+
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft3$UF, ft3$Publico, "SP"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth =30 , colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_mediana_21$medianap))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+
+  #De acordo com os valores obtidos, podemos dizer que filmes Paulista tem uma público maior do que filmes Cearenses se analisarmos a Mediana.
+
+```
+
+
+
+##QUESTÃO 4
+     
+4. Nos anos que houve decréscimo na produção de filmes, quais as estimativas ou Qual o gênero mais assistido?
+
+Se observarmos curidadosamente as quantidades de lançamentos em cada ano, vamos perceber que em alguns anos houve decréscimo de lançamento. Acredito ser possível traçar um relacionamente entre alguns fatores de econômia, por exemplo. Mas no meu caso irei apenas demostrar quais os filmes que as pessoas preferiram nestes anos.
+
+
+```{r q5, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+#tabela com valores eplotagem
+
+x<-table(filmes_tratados$AnoLancamento)
+
+x<-as.data.frame(x)
+
+ggplot(data = x,aes(x= x$Var1, y= x$Freq) )+geom_bar(stat = "identity")+ylab("Frequência")+xlab("Ano")+ggtitle("Gráfico barras: Ano X Frequência" )
+
+
+#organizando dados
+
+ft4<-filmes_tratados[, c(2,3,8,10,11)]#Titulo, Genero e Publico
+#View(ft4)
+
+#limpando e tratando os valores
+
+ft4$Publico<-as.character(ft4$Publico)
+
+
+#remove pontos de Publico
+ponto<-'\\.'
+
+for(i in 1:length(ft4$Publico)){
+  ft4[i,5]<-gsub(ponto,"",ft4[i,5])}
+
+ft4$Publico<-as.numeric(ft4$Publico)
+
+#remove pontos e virgulas de --renda
+ft4$Renda<-as.character(ft4$Renda)
+ponto<-'\\.'
+
+for(i in 1:length(ft4$Renda)){
+  ft4[i,4]<-gsub(ponto,"",ft4[i,4])}
+
+virg<-'\\,'
+
+for(i in 1:length(ft4$Renda)){
+  ft4[i,4]<-gsub(virg,".",ft4[i,4])}
+
+#transforma numérico
+ft4$Renda<-as.numeric(ft4$Renda)
+
+#Pega apenas quem rendeu mais de mil reaise teve mais de mil espectadores
+
+ft4<-ft4[, c(1,3,4,5)]
+ft4<-filter(ft4,Renda>1000, Publico>1000)
+
+
+media_ft4<-group_by(ft4,AnoLancamento)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+View(media_ft4)
+
+ knitr::kable(media_ft4, caption = "Médias de Renda e Publico")
+ 
+
+```
+
+  Irei trabalhar apenas com os anos em que houve diminuição da quantidade de filmes em relação ao seu ano anterior, neste caso são 06: 2000, 2002, 2005, 2010,2012, 2014.
+  
+```{r q6, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+  ft4<-filter(ft4, AnoLancamento=='2000'| AnoLancamento=='2002'|AnoLancamento=='2005'|AnoLancamento=='2010'|AnoLancamento=='2012'|AnoLancamento=='2014' )
+
+#Médias de Renda e Publico dos anos de decréscimo
+medias_ft4<-group_by(ft4,AnoLancamento)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+
+knitr::kable(medias_ft4, caption = "Médias de Renda e Publico dos anos de decréscimo")
+
+#Aqui é possível perceber que dentro desses anos os filmes de ficção ciêntífica tiveram tanto renda quando Público bem maior que os demais.
+
+medias_ft4<-group_by(ft4, Genero)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+#View(medias_ft4)
+knitr::kable(medias_ft4, caption = "Médias de Renda e Publico dos anos dos gêneros")
+
+#Como foram poucos filmes de Animação (apenas 06), irei retirálos do experimento, e agir em cima apenas de documentário e Ficção.
+
+ft4<-filter(ft4,Genero!="Animação")
+
+
+
+```
+
+
+  Agora veremos as estimativas de público e rendas em anos de decrescimo apenas para os gêneros Documentário e Ficção:
+  
+
+```{r q7, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+medias_ft4<-group_by(ft4,AnoLancamento)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+
+knitr::kable(medias_ft4, caption = "Médias de Renda e Publico dos anos de decréscimo")
+
+#Aqui é possível perceber que dentro desses anos os filmes de ficção ciêntífica tiveram tanto renda quando Público bem maior que os demais.
+
+medias_ft4<-group_by(ft4, Genero)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+#View(medias_ft4)
+
+medias_ft4<-group_by(ft4, Genero)%>%summarise(mediaR=mean(Renda),mediaP=mean(Publico))
+knitr::kable(medias_ft4, caption = "Médias de Renda e Publico dos anos dos gêneros")
+
+
+
+#Ficção - Documentário Média Público
+dif_mediap_21 = medias_ft4[2,3] - medias_ft4[1,3]
+print(paste("Diferença na mediana observada:", round(dif_mediap_21),".Seria Melhor Ficção"))
+
+
+#Ficção - Documentário Média Renda
+dif_mediar_21=medias_ft4[2,2]-medias_ft4[1,2]
+print(paste("Diferença na media observada:", round(dif_mediar_21), ".Seria Melhor Ficção"))
+
+
+
+
+```
+
+
+
+
+
+  **Iniciando as probabilidades**
+  
+  PROBABILIDADE PARA MÉDIAS DE PÚBLICO:
+  
+  
+```{r q8, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+
+# Retorna a diferença nas médias entre o grupos de y
+# nos índices com valor de x igual a baseline após embaralhar x.
+
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_mean = mean(y[which(embaralhado == baseline)])
+  other_mean = mean(y[which(embaralhado != baseline)])
+  return(other_mean - baseline_mean)
+}
+
+
+#O  experimento medindo as médias Ficção --PÚBLICO
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft4$Genero, ft4$Publico, "Ficção"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth =30 , colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_mediap_21$mediaP))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+ #Neste experimento apenas uma houve apenas uma vez em que a diferença no experimento foi maior do que a média.
+#Portanto é centro que o valor do público de filmes de Ficção é meior que os de Documentários
+
+##########################
+
+repete_experimento_de_diff = function(x, y, baseline){
+  embaralhado = x[sample(NROW(x))]
+  baseline_mean = mean(y[which(embaralhado == baseline)])
+  other_mean = mean(y[which(embaralhado != baseline)])
+  return(other_mean - baseline_mean)
+}
+
+
+#O  experimento medindo as médias Ficção --RENDA
+
+num_experimentos = 1000#Rodando mil vezes
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = repete_experimento_de_diff(ft4$Genero, ft4$Renda, "Ficção"))
+
+#Demora um absurdo!!!
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+ geom_histogram(binwidth =30 , colour = "darkblue", fill = "white") 
+#Tive que adicionar um valor alto para o binwith, as diferenças de valores variam muito em alguns casos.
+
+summary(experimentos)
+
+quantas_aconteceram = length(which(experimentos$diferenca >= dif_mediar_21$mediaR))
+probabilidade = quantas_aconteceram / num_experimentos
+
+print(paste("Este Evento ocorreu: ",quantas_aconteceram,"vezes" ))
+print(paste("A probabilidade de ocorrência é de: ",probabilidade))
+
+ #Neste experimento apenas não houve vez em que a diferença no experimento foi maior do que a média.
+#Portanto é certo que o valor da Renda de filmes de Ficção é meior que os de Documentários
+
+
+```
+
+
+**Medindo o IC:**
+
+
+```{r q9, echo=TRUE, message=FALSE, warning=FALSE, results='asis'}
+
+
+##Intervalo de confiança para  Ficção > aNIMAÇÃO  --MÉDIA
+repeticoes = 1000 # Experimento com 1000 reptições
+
+#Gerenaod os valores para o bootrap
+exp_com_bootstrap <- function(x, y){
+  boot_x <- sample(x, size = NROW(x), replace = TRUE) # aqui é o bootstrap
+  boot_y <- sample(y, size = NROW(y), replace = TRUE) # de novo!
+  return(mean(boot_x) - mean(boot_y))
+}
+
+
+
+experimentos = data_frame(i = 1:num_experimentos)
+experimentos = experimentos %>% 
+  rowwise() %>% 
+  mutate(diferenca = exp_com_bootstrap(ft4[ft4$Genero=="Ficção",]$Renda,ft4[ft4$Genero=="Documentário",]$Renda ))
+
+
+
+ggplot(experimentos, aes(x = diferenca/1e3)) + 
+  geom_histogram(binwidth = 100, colour = "darkorange", fill = "white")
+summary(experimentos)
+
+# IC com 90%: 
+#"Portanto em 90% com (margem +-0.5) das repetições as médias ficaram entre:  "
+alpha = .1
+
+quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+
+# IC com 95%:
+#Portanto em 95% das repetições, com margem de +-2,5  as médias ficaram entre:
+alpha = .05
+
+  quantile(experimentos$diferenca, probs = c(alpha/2, 1 - alpha/2))
+  
+  
+  
+  View(filmes_tratados)
+  ft1<-filter(filmes_tratados,Genero=="Ficção" | Genero=="Animação")
+  
+  df<-filter(ft1,Genero=="Animação")
+  
+  View(ft1)
+  
+  
+  table(df$Genero)
+  #Fim
+  
+  
+
+```
+

@@ -1,0 +1,100 @@
+---
+title: "testes do  prob3-chk2-fpcc2"
+author: "Maelson Marques de Lima"
+date: "16 de maio de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+
+```{r cars}
+
+
+
+
+
+##TESTES DE CONTAGEM DE PALAVRAS##
+
+
+
+
+library(stringi)
+
+x<- "abc.def.ghi" #x do tipo string
+
+x3
+x2<-stri_stats_latex(x)
+x2
+
+
+x2<-stri_stats_latex(x)(4)#pega apenas o valor da posição 4, pois esta função retorna um vetor.
+
+x3_valor_Iteiro<-as.integer(x2)#pega apenas o valor do tipo inteiro.
+
+x3_valor_Iteiro
+
+
+
+
+##TESTE DE SUBSTITUIÇÃO DE STRING
+
+
+
+s <- "aab.ab.ac"
+# The character to search for
+p <- "-"
+# Replace all occurrences by the empty string - note that gsub uses regular expressions, so escape p accordingly
+s2 <- gsub(p,"",s) # Count the length difference
+
+sub("\\.", "", s)
+
+s2
+
+s3i<-novaTabela[2137,3]
+s3i
+s3<-gsub(p,"",novaTabela[2137,3])
+
+s3
+
+novaTabela[2137,3]<-s3
+mode(novaTabela$genres)
+mode(novaTabela[2137,3])
+mode(s3)
+
+novaTabela$genres<-as.character(novaTabela$genres)
+
+ 
+##TESTE DETECTA -##
+
+stri_detect_regex(c("abc-def|ghi", "a2", "b3", "a4", "c5"), "-")
+
+
+
+
+##TESTE DAS FUNÇÕES LATEX
+
+movies_join_ratings#quem é teste do caralho 35?
+stri_stats_latex(movies_join_ratings$genres[35])[4]#quantas palavras ele tem?
+
+movies_join_ratings2<-edit(movies_join_ratings%>%arrange(genres))#foi utilizado porque existem 7 registros sem gênero listado, mas que foram contabilizados por terem anotas 3 palavras (no generes listed).
+
+
+ngenero2<-movies_join_ratings
+for(i in 1:length(movies_join_ratings$genres)){if(movies_join_ratings[i,3]=="(no genres listed)"){ngenero2[i,7]<-'0'}}
+
+View(ngenero2)
+
+
+vizu<-ngenero2%>%arrange(desc(ngeneros))
+View(vizu)
+is.integer(ngenero2$ngeneros)
+
+ngenero2$ngeneros<-as.integer(ngenero2$ngeneros)
+
+```
